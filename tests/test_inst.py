@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import numpy as np
 from numpy.random import randint
 
-from src.instance import Instance, ShapeError
+from src.instance import Instance, ShapeError, ConsistencyError
 
 
 class InstanceTest(unittest.TestCase):
@@ -15,53 +15,86 @@ class InstanceTest(unittest.TestCase):
         """
         Tests the initialization process
         """
-        n_people = 100
+        n_p_units = 100
         n_days = 7
         n_tasks = 5
-        inst = Instance(n_people, n_days, n_tasks)
+        inst = Instance(n_p_units, n_days, n_tasks)
         # # Test if the solution attribute has the correct shape.
-        # self.assertEqual(len(inst.solution), n_days*n_people*n_tasks)
+        # self.assertEqual(len(inst.solution), n_days*n_p_units*n_tasks)
 
         # Test if the instance accepts the correct shaped variables.
-        Qjk = 2*randint(0, high=2, size=(n_days, n_tasks))
-        Ci = randint(0, high=2, size=n_people)
-        Gi = randint(0, high=2, size=n_people)
-        Fijk = set([(randint(0, n_people), randint(0, n_days),
+        Qjk = 2 * randint(0, high=2, size=(n_days, n_tasks))
+        QCjk = Qjk
+        QGjk = Qjk
+        Ci = randint(0, high=2, size=n_p_units)
+        Gi = randint(0, high=2, size=n_p_units)
+        Fijk = set([(randint(0, n_p_units), randint(0, n_days),
                      randint(0, n_tasks)) for i in range(15)])
-        Rijk = set([(randint(0, n_people), randint(0, n_days),
+        Rijk = set([(randint(0, n_p_units), randint(0, n_days),
                      randint(0, n_tasks)) for i in range(15)])
         Rijk = list(Rijk.difference(Fijk))
         Fijk = list(Fijk)
-        
-        inst.is_parent = Ci
-        inst.is_man = Gi
-        inst.is_allocated = Fijk
-        inst.not_available = Rijk
+
+        inst.n_parents = Ci
+        inst.n_women = Gi
+        inst.force = Fijk
+        inst.reject = Rijk
         inst.people_per_task = Qjk
+        inst.parents_per_task = np.copy(QCjk)
+        inst.women_per_task = np.copy(QGjk)
+
+        # Check the pre-decision consistency.
+        inst.check_consistency()
+
+        # Check parent data inconsistency (QCjk > Qjk for some jk)
+        with self.assertRaises(ConsistencyError):
+            QCjk = inst.parents_per_task
+            QCjk[0, 0] = QCjk[0, 0] + 1
+            inst.parents_per_task = QCjk
+            inst.check_consistency()
+
+        # Get back to consistent state
+        inst.parents_per_task = np.copy(inst.people_per_task)
+
+        # Check gender data inconsistency (QGjk > Qjk for some jk)
+        with self.assertRaises(ConsistencyError):
+            QGjk = inst.women_per_task
+            QGjk[0, 0] = QGjk[0, 0] + 1
+            inst.women_per_task = QGjk
+            inst.check_consistency()
+
+        # Get back to consistent state
+        inst.parents_per_task = np.copy(inst.people_per_task)
 
         # Test with the wrongly shaped variables (Should raise ShapeError)
-        Qjk = 2*randint(0, high=2, size=(n_days+1, n_tasks+1))
-        Ci = randint(0, high=2, size=n_people+1)
-        Gi = randint(0, high=2, size=n_people+1)
-        Fijk = set([(randint(0, n_people), randint(0, n_days))
+        Qjk = 2 * randint(0, high=2, size=(n_days + 1, n_tasks + 1))
+        QCjk = np.copy(Qjk)
+        QGjk = np.copy(Qjk)
+
+        Ci = randint(0, high=2, size=n_p_units + 1)
+        Gi = randint(0, high=2, size=n_p_units + 1)
+        Fijk = set([(randint(0, n_p_units), randint(0, n_days))
                     for i in range(15)])
-        Rijk = set([(randint(0, n_people), randint(0, n_days))
+        Rijk = set([(randint(0, n_p_units), randint(0, n_days))
                     for i in range(15)])
         Rijk = list(Rijk.difference(Fijk))
         Fijk = list(Fijk)
 
         with self.assertRaises(ShapeError):
-            inst.is_parent = Ci
+            inst.n_parents = Ci
         with self.assertRaises(ShapeError):
-            inst.is_man = Gi
+            inst.n_women = Gi
         with self.assertRaises(ShapeError):
-            inst.is_allocated = Fijk
+            inst.force = Fijk
         with self.assertRaises(ShapeError):
-            inst.not_available = Rijk
+            inst.reject = Rijk
         with self.assertRaises(ShapeError):
             inst.people_per_task = Qjk
+        with self.assertRaises(ShapeError):
+            inst.parents_per_task = QCjk
+        with self.assertRaises(ShapeError):
+            inst.women_per_task = QGjk
 
-        
 
 if __name__ == '__main__':
     unittest.main()

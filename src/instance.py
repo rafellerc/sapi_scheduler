@@ -1,6 +1,9 @@
-import numpy as np
-from ortools.constraint_solver import pywrapcp
 from random import randint
+
+import numpy as np
+# NOTE: Must have python 3.6.1 or higher to use cp_models
+from ortools.sat.python import cp_model
+from tabulate import tabulate
 
 
 class ShapeError(Exception):
@@ -11,11 +14,50 @@ class ConsistencyError(Exception):
     pass
 
 
+class ContraintSatError(Exception):
+    pass
+
+
+class SolutionBuilder(cp_model.CpSolverSolutionCallback):
+    """ Builds the solutions found by the solver.
+    """
+
+    def __init__(self, sol_list, shifts, n_p_units, n_days, n_tasks, max_sols):
+        """
+            sol_list: (list) The Instance object's list of solutions.
+        """
+        cp_model.CpSolverSolutionCallback.__init__(self)
+        # This should be a reference to the object's list. Check if true.
+        self._sol_list = sol_list
+        self._shifts = shifts
+        self._n_p_units = n_p_units
+        self._n_days = n_days
+        self._n_tasks = n_tasks
+        self._solution_count = 0
+        self._solution_limit = max_sols
+
+    def on_solution_callback(self):
+        self._solution_count += 1
+        # print('Solution %i' % self._solution_count)
+        solution = np.zeros([self._n_p_units, self._n_days, self._n_tasks])
+        for i in range(self._n_p_units):
+            for j in range(self._n_days):
+                for k in range(self._n_tasks):
+                    solution[i, j, k] = self.Value(self._shifts[(i, j, k)])
+        self._sol_list.append(solution)
+        if self._solution_count >= self._solution_limit:
+            print('Stop search after %i solutions' % self._solution_limit)
+            self.StopSearch()
+
+    def solution_count(self):
+        return self._solution_count
+
+
 class Instance(object):
     """ An instance of the SAPI scheduling problem.
     """
 
-    def __init__(self, n_p_units, n_days, n_tasks):
+    def __init__(self, n_p_units, n_days, n_tasks, max_time=100, max_sols=100):
         """
         Args:
             n_p_units: (int) The number of p_units considered in any solution.
@@ -25,6 +67,8 @@ class Instance(object):
             n_tasks: (int) The number of tasks considered in each day. The
                 current solution does not admit a variable number of tasks.
                 The tasks will be indexed by the letter 'k'.
+            max_time: (int) The time limit imposed to the solver in seconds.
+            max_sols: (int) The maximum number of solution to be stored.
 
         Attributes:
             people_per_task: (numpy.ndarray) The number of p_units per
@@ -38,15 +82,16 @@ class Instance(object):
                 "j" for task "k".
             force: (list) The opposite of reject, that is, the triple (i,j,k)
                 indicates that p_unit 'i' must work on day 'j' for task 'k'.
-            solver: (ortools.constraint_solver.pywrapcp.Solver) The ortools
+            model: (ortools.sat.python.cp_model.CpModel) The ortools
                 constraint solver used to define the solution.
             shifts: (dictionary) The solution matrix for the given instance.
                 It's implemented as a dictionary indexed by triples of (i,j,k),
                 where a 1 represents that p_unit 'i' will be allocated in
                 day 'j' for task 'k'.
-            shifts_flat: (list) A flattened version of the solution.
         """
-        self.solver = pywrapcp.Solver("instance_solver")
+        self.model = cp_model.CpModel()
+        self.max_sols = max_sols
+        self.max_time = max_time
         self.shifts = {}
 
         # TODO set them as property, with a setter method that reinitializes
@@ -67,14 +112,16 @@ class Instance(object):
         for i in range(n_p_units):
             for j in range(n_days):
                 for k in range(n_tasks):
-                    self.shifts[(i, j, k)] = self.solver.BoolVar(
+                    self.shifts[(i, j, k)] = self.model.NewBoolVar(
                         'person{}_day{}_task{}'.format(i, j, k))
 
-        self.shifts_flat = [self.shifts[(i, j, k)] for i in range(n_p_units)
-                              for j in range(n_days) for k in range(n_tasks)]
+        # self.shifts_flat = [self.shifts[(i, j, k)] for i in range(n_p_units)
+        #                       for j in range(n_days) for k in range(n_tasks)]
 
     # This Section, though long is only concerned with getter and setter
-    # methods for the class using the @property decorator######################
+    # methods for the class using the @property decorator
+    ###########################################################################
+    ###########################################################################
     @property
     def n_p_units(self):
         return self._n_p_units
@@ -115,7 +162,6 @@ class Instance(object):
                              "shape should be {}".format((self._n_days, self._n_tasks)))
         self._parents_per_task = QCjk
 
-
     @property
     def women_per_task(self):
         return self._women_per_task
@@ -143,7 +189,7 @@ class Instance(object):
             raise ShapeError("Wrong shape to n_people, correct shape "
                              "should be {}".format((self._n_p_units,)))
         self._n_people = Pi
-    
+
     @property
     def n_parents(self):
         return self._n_parents
@@ -189,7 +235,7 @@ class Instance(object):
 
     @property
     def force(self):
-            return self._force
+        return self._force
 
     @force.setter
     def force(self, Fijk):
@@ -202,6 +248,7 @@ class Instance(object):
                 raise TypeError("Elements of force must be tuples.")
         self._force = Fijk
 
+    ###########################################################################
     ###########################################################################
 
     def check_consistency(self):
@@ -223,104 +270,127 @@ class Instance(object):
                                    " days/tasks: {}".format(['day ' + str(day) + ' task ' + str(task)
                                                              for (day, task) in parent_inconsist]))
 
-    def solve(self):
+    def solve(self, relax=[], min_gap=4):
+        """ Applies all the problem's constraints and applies the solver to
+        the instance.
+        Args:
+            relax: (list) A list with integers indicating which constraints
+                should be relaxed. To be used when no solution is found. The
+                default relaxation is to remove the Constraint 7 "Max one
+                allocation per 4 weeks", i.e. relax=[7]. To relax multiple
+                contraints put them on the list, i.e. relax = [2, 3, 7]
+            min_gap: (int) The minimun time between two allocations in
+                constraint 7. Used for relaxing the problem.
         """
-        """
-        # [Demand of people per task constraint]
-        for j in range(self.n_days):
-            for k in range(self.n_tasks):
-                self.solver.Add(sum(self.shifts[(i, j, k)]*self.n_people[i] for i in range(self.n_p_units)) == self.people_per_task[j, k])
+        self.solver = cp_model.CpSolver()
+        self.solver.parameters.max_time_in_seconds = self.max_time
+        self.solution_list = []
 
-        # Create Decision Builder
-        db = self.solver.Phase(self.shifts, self.solver.CHOOSE_FIRST_UNBOUND,
-                          self.solver.ASSIGN_MIN_VALUE)
-        # Create the solution collector.
-        solution = self.solver.Assignment()
-        solution.Add(self.shifts_flat)
-        collector = self.solver.AllSolutionCollector(solution)
+        # Before solving, check consistency
+        print('Checking Instance Consistency...')
+        self.check_consistency()
 
-        self.solver.Solve(db, [collector])
-        print("Solutions found:", collector.SolutionCount())
-        print("Time:", solver.WallTime(), "ms")
+        print('Solving Instance...')
+        # [Constraint 1: Demand of people per task]
+        if 1 not in relax:
+            for j in range(self.n_days):
+                for k in range(self.n_tasks):
+                    self.model.Add(sum(self.shifts[(i, j, k)] * self.n_people[i]
+                                       for i in range(self.n_p_units)) ==
+                                   self.people_per_task[j, k])
+        # [Constraint 2: Min number of parents]
+        if 2 not in relax:
+            for j in range(self.n_days):
+                for k in range(self.n_tasks):
+                    self.model.Add(sum(self.shifts[(i, j, k)] * self.n_parents[i]
+                                       for i in range(self.n_p_units)) ==
+                                   self.parents_per_task[j, k])
+        # [Constraint 3: Min number of women]
+        if 3 not in relax:
+            for j in range(self.n_days):
+                for k in range(self.n_tasks):
+                    self.model.Add(sum(self.shifts[(i, j, k)] * self.n_women[i]
+                                       for i in range(self.n_p_units)) ==
+                                   self.women_per_task[j, k])
+        # [Constraint 4: One task per day]
+        if 4 not in relax:
+            for i in range(self.n_p_units):
+                for j in range(self.n_days):
+                    self.model.Add(sum(self.shifts[(i, j, k)]
+                                       for k in range(self.n_tasks)) <= 1)
 
-                
+        # [Constraint 5: Force Variables]
+        if 5 not in relax:
+            for triple in self.force:
+                self.model.Add(self.shifts[triple] == 1)
+
+        # [Constraint 6: Reject Variables]
+        if 6 not in relax:
+            for triple in self.reject:
+                self.model.Add(self.shifts[triple] == 0)
+
+        # [Constraint 7: Max one allocation per 4 weeks]
+        if 7 not in relax:
+            for i in range(self.n_p_units):
+                for j_0 in range(self.n_days - min_gap):
+                    self.model.Add(sum(self.shifts[(i, j, k)] for j in range(
+                        j_0, j_0 + min_gap) for k in range(self.n_tasks)) <= 1)
+
+        solution_printer = SolutionBuilder(self.solution_list, self.shifts,
+                                           self.n_p_units, self.n_days,
+                                           self.n_tasks, self.max_sols)
+        status = self.solver.SearchForAllSolutions(
+            self.model, solution_printer)
+        print('Status = %s' % self.solver.StatusName(status))
+        print('Number of solutions found: %i' %
+              solution_printer.solution_count())
+
+
+def print_solution(sol_matrix, names=None):
+    """ Prints the solution to the terminal
+    Args:
+        sol_matrix: (numpy.array) The solution matrix
+        names: (list) The list with the names of the people in order.
+    """
+    headers = ['day {}'.format(i + 1) for i in range(sol_matrix.shape[1])]
+    headers.insert(0, ' ')
+    if names is None:
+        names = list(range(sol_matrix.shape[0]))
+    contents = []
+    for k in range(sol_matrix.shape[2]):
+        row = ['task {}'.format(k + 1)]
+        for j in range(sol_matrix.shape[1]):
+            people = ''
+            for i in range(sol_matrix.shape[0]):
+                if sol_matrix[i, j, k] == 1:
+                    people = people + str(names[i]) + ', '
+            # Remove the last two strings (A space and a comma)
+            if len(people) > 2:
+                people = people[0:-2]
+            row.append(people)
+        contents.append(row)
+    print(tabulate(contents, headers=headers, tablefmt="fancy_grid"))
+
 
 if __name__ == '__main__':
-    inst = Instance(10, 5, 4)
-    Qjk = np.random.randint(1, high=4, size=[5, 4])
-    QGjk = np.copy(Qjk)
-    QCjk = np.copy(Qjk)
-    # QGjk[2,3]=4
-    # QGjk[4,3]=5
-    # QGjk[1,0]=5
+    names = ['Pedro e Kim', 'Tania', 'Clarissa', 'Guilherme', 'Rafael',
+             'Andressa', 'Carlinhos', 'Debora', 'Carol e Rafaela', 'Bruna']
+    inst = Instance(10, 3, 2)
+    # Define the p units.
+    inst.n_people = np.array([2, 1, 1, 1, 1, 1, 1, 1, 2, 1])
+    inst.n_women = np.array([1, 1, 1, 0, 0, 1, 0, 1, 2, 1])
+    inst.n_parents = np.array([0, 1, 0, 0, 0, 0, 0, 1, 0, 0])
+    # One baby task (4 people - 2 parents - 2 women) and one kids task
+    # (2 people - 0 parents - 1 women)
+    inst.people_per_task = np.array([[4, 2], [4, 2], [4, 2]])
+    inst.women_per_task = np.array([[2, 1], [2, 1], [2, 1]])
+    inst.parents_per_task = np.array([[2, 0], [2, 0], [2, 0]])
+    # Force Pedro e Kim on the first day task 1, Debora on day 2 task 1, and
+    # Rafael on day 3 task 2.
+    inst.force = [(0, 0, 0), (7, 1, 0), (4, 2, 1)]
+    # Reject Clarissa on day 1 task 2, Andressa on day 2 task 2, and Carlinhos
+    # on day 3 task 1.
+    inst.reject = [(2, 0, 1), (5, 1, 1), (6, 2, 0)]
 
-    inst.people_per_task = Qjk
-    inst.women_per_task = QGjk
-    inst.parents_per_task = QCjk
-
-    inst.check_consistency()
-
-# # NOTE The numpy random int generator works with open intervals of type [a, b[
-# # while random.randint(a,b) works with [a, b]
-
-# # Number of people
-# n_people = 10
-# n_days = 3
-# n_tasks = 2
-
-# # Number of people per task. its a matrix (n_days x n_tasks) where
-# # each task has always the same amount of people on every day.
-# people_per_task = np.random.randint(1, 5, size=n_days)
-# people_per_task = people_per_task.reshape(-1,1).repeat(n_tasks, axis=1)
-
-# # Vector is_parent(i) is 0 when person 'i' is not a parent and 1 when it is.
-# # prob_parent is in [0,1] and is the probability of any person being a parent
-# prob_parent = 0.5
-# is_parent = (np.random.rand(n_people) < prob_parent).astype(int)
-
-# # is_man(i) is 1 when person 'i' is a man and 0 when its a woman.
-# prob_man = 0.5
-# is_man = (np.random.rand(n_people) < prob_man).astype(int)
-
-# # not_available is list of triples (i,j,k) each of which represent a
-# # non-availalability of person "i" on day "j" for task "k".
-# # prob_not_available is the probability any triple (i,j,k) is in this list
-# # so we generate prob_not_available*n_days*n_people*n_tasks distinct random
-# # triples.
-# prob_not_available = 0.3
-# not_available = []
-# while len(not_available) < prob_not_available*n_days*n_people*n_tasks:
-#     new_triple = (randint(0, n_people-1), randint(0, n_days-1), randint(0, n_tasks-1))
-#     if new_triple not in not_available:
-#         not_available.append(new_triple)
-
-# # is_allocated is the opposite of not_available, where the triple (i,j,k)
-# # indicates that person 'i' must work on day 'j' for task 'k'.
-# prob_is_allocated = 0.2
-# is_allocated = []
-# while len(is_allocated) < prob_is_allocated*n_days*n_people*n_tasks:
-#     new_triple = (randint(0, n_people-1), randint(0, n_days-1), randint(0, n_tasks-1))
-#     if (new_triple not in not_available) and (new_triple not in is_allocated):
-#         is_allocated.append(new_triple)
-
-
-# solver = pywrapcp.Solver("instance_solver")
-
-# # Definition of the solution
-# # S = np.zeros([n_people, n_days, n_tasks])
-# S = {}
-
-# for i in range(n_people):
-#     for j in range(n_days):
-#         for k in range(n_tasks):
-#             S[(i, j, k)] = solver.BoolVar('person{}_day{}_task{}'.format(i, j, k))
-
-# S_flat = [S[(i,j,k)] for i in range(n_people) for j in range(n_days) for k in range(n_tasks)]
-
-# # TODO Check dims
-
-# print('people per task {}'.format(people_per_task))
-# print('is parent {}'.format(is_parent))
-# print('is man {}'.format(is_man))
-# print('not available {}'.format(not_available))
-# print('is_allocated {}'.format(is_allocated))
+    inst.solve()
+    print_solution(inst.solution_list[50], names=names)

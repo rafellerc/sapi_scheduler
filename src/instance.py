@@ -303,14 +303,14 @@ class Instance(object):
             for j in range(self.n_days):
                 for k in range(self.n_tasks):
                     self.model.Add(sum(self.shifts[(i, j, k)] * self.n_parents[i]
-                                       for i in range(self.n_p_units)) ==
+                                       for i in range(self.n_p_units)) >=
                                    self.parents_per_task[j, k])
         # [Constraint 3: Min number of women]
         if 3 not in relax:
             for j in range(self.n_days):
                 for k in range(self.n_tasks):
                     self.model.Add(sum(self.shifts[(i, j, k)] * self.n_women[i]
-                                       for i in range(self.n_p_units)) ==
+                                       for i in range(self.n_p_units)) >=
                                    self.women_per_task[j, k])
         # [Constraint 4: One task per day]
         if 4 not in relax:
@@ -336,14 +336,15 @@ class Instance(object):
                     self.model.Add(sum(self.shifts[(i, j, k)] for j in range(
                         j_0, j_0 + min_gap) for k in range(self.n_tasks)) <= 1)
 
-        solution_printer = SolutionBuilder(self.solution_list, self.shifts,
-                                           self.n_p_units, self.n_days,
-                                           self.n_tasks, self.max_sols)
-        status = self.solver.SearchForAllSolutions(
-            self.model, solution_printer)
-        print('Status = %s' % self.solver.StatusName(status))
+        self.solution_printer = SolutionBuilder(self.solution_list, self.shifts,
+                                                self.n_p_units, self.n_days,
+                                                self.n_tasks, self.max_sols)
+        self.status = self.solver.SearchForAllSolutions(
+            self.model, self.solution_printer)
+        self.n_solutions = self.solution_printer.solution_count()
+        print('Status = %s' % self.solver.StatusName(self.status))
         print('Number of solutions found: %i' %
-              solution_printer.solution_count())
+              self.solution_printer.solution_count())
 
 
 def print_solution(sol_matrix, names=None):

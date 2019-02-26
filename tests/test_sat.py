@@ -54,13 +54,13 @@ class SatisfiabilityTest(unittest.TestCase):
         # [Constraint 2: Min number of parents]
         for j in range(inst.n_days):
             for k in range(inst.n_tasks):
-                self.assertTrue(np.dot(solution[:, j, k], inst.n_parents) ==
+                self.assertTrue(np.dot(solution[:, j, k], inst.n_parents) >=
                                 inst.parents_per_task[j, k])
 
         # [Constraint 3: Min number of women]
         for j in range(inst.n_days):
             for k in range(inst.n_tasks):
-                self.assertTrue(np.dot(solution[:, j, k], inst.n_women) ==
+                self.assertTrue(np.dot(solution[:, j, k], inst.n_women) >=
                                 inst.women_per_task[j, k])
 
         # [Constraint 4: One task per day]

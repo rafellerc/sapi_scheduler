@@ -99,16 +99,16 @@ class DataInputTest(unittest.TestCase):
         # Check two random names
         self.assertTrue('Carol Cruz' in problem_info.names and
                         'Vanessa Andrade' in problem_info.names)
-        n_women = [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0,
-                   1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1,
-                   0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1,
-                   1, 1, 1, 1, 1, 0, 1, 0]
-        n_parents = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1,
-                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                     1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                     1, 1, 1, 1, 1, 0, 0, 0]
-        self.assertTrue(problem_info.n_women == n_women)
-        self.assertTrue(problem_info.n_parents == n_parents)
+        n_women = np.array([1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0,
+                            1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1,
+                            0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1,
+                            1, 1, 1, 1, 1, 0, 1, 0])
+        n_parents = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1,
+                              1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                              1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                              1, 1, 1, 1, 1, 0, 0, 0])
+        self.assertTrue((problem_info.n_women == n_women).all())
+        self.assertTrue((problem_info.n_parents == n_parents).all())
 
         # Check some random preferences (Péricles Pereira: 22,
         # and Gabriela Seabra Gomes Mustafá: 25), given that they have no

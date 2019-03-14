@@ -13,10 +13,35 @@ Person = namedtuple(
     'Person', ['name', 'gender', 'exp_level', 'task_answ'])
 
 ProblemInfo = namedtuple('ProblemInfo', [
-                         'n_p_units', 'n_days', 'n_tasks', 'tasks', 'names', 'days',
-                         'people_per_task', 'women_per_task',
+                         'n_p_units', 'n_days', 'n_tasks', 'tasks', 'ids',
+                         'names', 'days', 'people_per_task', 'women_per_task',
                          'parents_per_task', 'n_people', 'n_women', 'n_parents',
                          'reject', 'force'])
+
+FichaServoInfo = namedtuple('FichaServoInfo', [
+                            'id_column', 'exp_column', 'gend_column',
+                            'task_columns', 'name_column'])
+
+DemandaInfo = namedtuple('DemandaInfo', [
+                         'people_column', 'women_column',
+                         'parents_column'])
+
+IndispInfo = namedtuple('IndispInfo', ['id_column', 'name_column',
+                                       'day_columns'])
+
+
+DEFAULT_FICHA_SERVO_INFO = FichaServoInfo(id_column='A',
+                                          exp_column='B',
+                                          gend_column='S',
+                                          task_columns=['G', 'H', 'I', 'J', 'K',
+                                                        'L', 'M', 'N', 'O'],
+                                          name_column='R')
+
+DEFAULT_DEMANDA_INFO = DemandaInfo(people_column='B', women_column='C',
+                                   parents_column='D')
+
+DEFAULT_INDISP_INFO = IndispInfo(id_column='A', name_column='C',
+                                 day_columns=['D', 'E', 'F', 'G'])
 
 # TODO Add some checks
 
@@ -128,20 +153,28 @@ def read_solution_sheet(file_path, id_column='A', name_column='C',
 
 
 def get_problem_info(ficha_servo_path, demanda_path, sol_sheet_path,
-                     exp_threshold=3):
+                     exp_threshold=3, ficha_servo_info=DEFAULT_FICHA_SERVO_INFO,
+                     demanda_info=DEFAULT_DEMANDA_INFO, indip_info=DEFAULT_INDISP_INFO):
+                    #  solution_sheet_day_columns=['D', 'E', 'F', 'G']):
     """ Gets the complete info from the sheets to define the problem
     Args:
-        ficha_servo_path: (str) 
-        demanda_path: (str)
-        sol_sheet_path: (str)
-        exp_threshold: (str)
+        ficha_servo_path: (str) The path to the ficha servo excel file.
+        demanda_path: (str) The path to the demanda excel file.
+        sol_sheet_path: (str) The path to the indisponibilidades excel file.
+        exp_threshold: (str) The number (between 0 and 5) corresponding to
+            the lowest experience level that defines someone as experienced or
+            parent.
     Returns:
-        problem_info: (namedtuple)
+        problem_info: (namedtuple) The named tuple with the problem information.
     """
-    tasks, people = read_ficha_servo(ficha_servo_path)
+    tasks, people = read_ficha_servo(ficha_servo_path, ficha_servo_info.id_column,
+                                     ficha_servo_info.exp_column, ficha_servo_info.gend_column,
+                                     ficha_servo_info.task_columns, ficha_servo_info.name_column)
     tasks_check, people_demand, women_demand, parents_demand = read_demanda(
-        demanda_path)
-    days, sheet_info = read_solution_sheet(sol_sheet_path)
+        demanda_path, demanda_info.people_column, demanda_info.women_column,
+        demanda_info.parents_column)
+    days, sheet_info = read_solution_sheet(
+        sol_sheet_path, indip_info.id_column, indip_info.name_column, indip_info.day_columns)
 
     if tasks != tasks_check:
         raise ConsistencyBetweenFilesError("The names of the tasks are different "
@@ -159,11 +192,11 @@ def get_problem_info(ficha_servo_path, demanda_path, sol_sheet_path,
     # NOTE The repetition assumes that the demand is a single list, i.e., that
     # the demands are specified only once, and equal on all days.
     people_per_task = np.repeat(np.array(people_demand_list)[
-                                np.newaxis, :], n_days, axis=0)
+        np.newaxis, :], n_days, axis=0)
     women_per_task = np.repeat(np.array(women_demand_list)[
-                               np.newaxis, :], n_days, axis=0)
+        np.newaxis, :], n_days, axis=0)
     parents_per_task = np.repeat(np.array(parents_demand_list)[
-                                 np.newaxis, :], n_days, axis=0)
+        np.newaxis, :], n_days, axis=0)
 
     id_to_i = {}
     names = []
@@ -188,7 +221,9 @@ def get_problem_info(ficha_servo_path, demanda_path, sol_sheet_path,
                 # NOTE: So far I'm not using the distiction between 'Gosto' and
                 # 'Aceito'.
                 reject += [(i, j, k) for j in range(len(days))]
-
+    n_people = np.array(n_people)
+    n_women = np.array(n_women)
+    n_parents = np.array(n_parents)
     for id_, day, info in sheet_info:
         i = id_to_i[id_]
         j = days.index(day)
@@ -202,6 +237,10 @@ def get_problem_info(ficha_servo_path, demanda_path, sol_sheet_path,
         elif info == 'indisp':
             reject += [(i, j, k) for k in range(len(tasks))]
 
+    ids = [None] * len(id_to_i)
+    for key, value in id_to_i.items():
+        ids[value] = key
+
     # Remove repeated triples.
     force = list(set(force))
     reject = list(set(reject))
@@ -210,6 +249,7 @@ def get_problem_info(ficha_servo_path, demanda_path, sol_sheet_path,
                                n_days=n_days,
                                n_tasks=n_tasks,
                                tasks=tasks,
+                               ids=ids,
                                names=names,
                                days=days,
                                people_per_task=people_per_task,

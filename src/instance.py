@@ -270,7 +270,7 @@ class Instance(object):
                                    " days/tasks: {}".format(['day ' + str(day) + ' task ' + str(task)
                                                              for (day, task) in parent_inconsist]))
 
-    def solve(self, relax=[], min_gap=4):
+    def solve(self, relax=[], one_alloc_period=4):
         """ Applies all the problem's constraints and applies the solver to
         the instance.
         Args:
@@ -279,8 +279,8 @@ class Instance(object):
                 default relaxation is to remove the Constraint 7 "Max one
                 allocation per 4 weeks", i.e. relax=[7]. To relax multiple
                 contraints put them on the list, i.e. relax = [2, 3, 7]
-            min_gap: (int) The minimun time between two allocations in
-                constraint 7. Used for relaxing the problem.
+            one_alloc_period: (int) The lenght of period in which each person
+                is only allowed to work once.
         """
         self.solver = cp_model.CpSolver()
         self.solver.parameters.max_time_in_seconds = self.max_time
@@ -332,9 +332,9 @@ class Instance(object):
         # [Constraint 7: Max one allocation per 4 weeks]
         if 7 not in relax:
             for i in range(self.n_p_units):
-                for j_0 in range(self.n_days - min_gap):
+                for j_0 in range(self.n_days - one_alloc_period + 1):
                     self.model.Add(sum(self.shifts[(i, j, k)] for j in range(
-                        j_0, j_0 + min_gap) for k in range(self.n_tasks)) <= 1)
+                        j_0, j_0 + one_alloc_period) for k in range(self.n_tasks)) <= 1)
 
         self.solution_printer = SolutionBuilder(self.solution_list, self.shifts,
                                                 self.n_p_units, self.n_days,
@@ -370,7 +370,7 @@ def print_solution(sol_matrix, names=None):
                 people = people[0:-2]
             row.append(people)
         contents.append(row)
-    print(tabulate(contents, headers=headers, tablefmt="fancy_grid"))
+    return tabulate(contents, headers=headers, tablefmt="fancy_grid")
 
 
 if __name__ == '__main__':

@@ -1,0 +1,66 @@
+solution_name: simple_solution
+
+###############################################################################
+#                            FICHA SERVO INFORMATION                          #
+###############################################################################
+ficha_servo_path: C:\Users\Rafael\dev\sapi_scheduler\data\Example_Ficha_Servo.xlsx
+ficha_servo_info:
+  id_column: A
+  exp_column: B
+  gend_column: S
+  task_columns: 
+    - G
+    - H
+    - I
+    - J
+    - K
+    - L
+    - M
+    - N
+    - O
+  name_column: R
+
+###############################################################################
+#                              DEMANDA INFORMATION                            #
+###############################################################################
+demanda_path: C:\Users\Rafael\dev\sapi_scheduler\data\Example_Demanda.xlsx
+demanda_info:
+  people_column: B
+  women_column: C
+  parents_column: D
+
+###############################################################################
+#                          INDISPONIBILIDADES INFORMATION                     #
+###############################################################################
+indisp_path: C:\Users\Rafael\dev\sapi_scheduler\data\Example_Indisponibilidade.xlsx
+indisp_info:
+  id_column: A
+  name_column: C
+  day_columns:
+    - D
+    - E
+    - F
+    - G
+
+###############################################################################
+#                          COUPLES/GROUPS INFORMATION                         #
+###############################################################################
+couples:
+  - (84, 88) # Duda e Marcão
+  - (60, 54) # Caio e Fernanda
+  - (72, 99) # Victor e Gabriela Mustafá
+  - (80, 90) # João Victor e Débora Falcão
+  - (89, 725) # Péricles e Isabela
+  - (113, 112) # Pedrinho e Kim
+  - (127, 713) # Samuel e Maísa
+  - (132, 383) # Leo e Carol Fuzaro
+  - (1186, 1187) # Danilo e Ju
+
+###############################################################################
+#                               SOLVER INFORMATION                            #
+#                        (CHANGE THIS TO RELAX THE PROBLEM)                   #
+###############################################################################
+exp_threshold: 3
+maximum_number_of_solutions: 20
+one_allocation_every_how_many_weeks: 4
+solutions_in_single_file: True

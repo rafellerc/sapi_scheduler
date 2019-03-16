@@ -6,7 +6,6 @@ from ast import literal_eval
 import os.path as osp
 from os import mkdir
 
-
 from src.instance import Instance
 from src.data_input import get_problem_info, ProblemInfo, FichaServoInfo, DemandaInfo, IndispInfo
 

@@ -63,7 +63,7 @@ def read_ficha_servo(file_path, id_column='A', exp_column='B', gend_column='S',
         tasks: (list) The list with all the available tasks.
         people: (dict) The dict of form {id:PersonNamedTuple}
     """
-    wb = load_workbook(file_path)
+    wb = load_workbook(file_path, data_only=True)
     sheet = wb.active
 
     column_to_task = {}
@@ -93,7 +93,7 @@ def read_demanda(file_path, people_column='B', women_column='C', parents_column=
     Returns:
 
     """
-    wb = load_workbook(file_path)
+    wb = load_workbook(file_path, data_only=True)
     sheet = wb.active
     idx = 2
     tasks = []
@@ -126,7 +126,7 @@ def read_solution_sheet(file_path, id_column='A', name_column='C',
         sheet_info: (list) A list with the triples (id, day name, info) where
             info can be one of the tasks or an indisponibility.
     """
-    wb = load_workbook(file_path)
+    wb = load_workbook(file_path, data_only=True)
     sheet = wb.active
     col_to_day = {}
     for column in day_columns:

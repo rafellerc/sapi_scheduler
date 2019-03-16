@@ -1,9 +1,10 @@
-solution_name: simple_solution
+﻿author: Rafael # Useless Line, but in some computers the PyYAML doesn't read the first value correctly
 
+solution_name: solution
 ###############################################################################
 #                            FICHA SERVO INFORMATION                          #
 ###############################################################################
-ficha_servo_path: C:\Users\Rafael\dev\sapi_scheduler\data\Example_Ficha_Servo.xlsx
+ficha_servo_path: C:\Users\Tania\sapi_scheduler\data\Example_Ficha_Servo.xlsx
 ficha_servo_info:
   id_column: A
   exp_column: B
@@ -23,7 +24,7 @@ ficha_servo_info:
 ###############################################################################
 #                              DEMANDA INFORMATION                            #
 ###############################################################################
-demanda_path: C:\Users\Rafael\dev\sapi_scheduler\data\Example_Demanda.xlsx
+demanda_path: C:\Users\Tania\sapi_scheduler\data\Example_Demanda.xlsx
 demanda_info:
   people_column: B
   women_column: C
@@ -32,7 +33,7 @@ demanda_info:
 ###############################################################################
 #                          INDISPONIBILIDADES INFORMATION                     #
 ###############################################################################
-indisp_path: C:\Users\Rafael\dev\sapi_scheduler\data\Example_Indisponibilidade.xlsx
+indisp_path: C:\Users\Tania\sapi_scheduler\data\Example_Indisponibilidade.xlsx
 indisp_info:
   id_column: A
   name_column: C
@@ -60,7 +61,7 @@ couples:
 #                               SOLVER INFORMATION                            #
 #                        (CHANGE THIS TO RELAX THE PROBLEM)                   #
 ###############################################################################
-exp_threshold: 3
+exp_threshold: 2
 maximum_number_of_solutions: 20
-one_allocation_every_how_many_weeks: 4
+one_allocation_every_how_many_weeks: 2
 solutions_in_single_file: True
